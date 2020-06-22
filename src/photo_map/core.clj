@@ -2,10 +2,12 @@
   (:require
    [hiccup.core :as hiccup]
 
+   [clj-common.as :as as]
    [clj-common.json :as json]
    [clj-common.localfs :as fs]
    [clj-common.http-server :as http-server]
-   [clj-common.path :as path]))
+   [clj-common.path :as path]
+   [clj-geo.math.tile :as tile-math]))
 
 (def storage (atom {}))
 
@@ -31,7 +33,7 @@
                     #(.endsWith (last %) ".jpg")
                     (fs/list
                      (path/string->path
-                      "/Users/vanja/my-dataset-temp/photo-evidence-3055-3284/")))]
+                      "/Users/vanja/my-dataset/photo-evidence/")))]
   (println "processing: " (path/path->string image-path))
   (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
                   (new java.io.File (path/path->string image-path)))]
@@ -44,8 +46,44 @@
        (.replace (last image-path) ".jpg" "")
        image-path))))
 
+#_(let [image-path (path/string->path "/Users/vanja/my-dataset-temp/gopro-copy/2020.06 - Geocaching Kosmaj mapillary/G0040785.JPG")]
+  (println "processing: " (path/path->string image-path))
+  (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
+                  (new java.io.File (path/path->string image-path)))]
+    (if-let [gpx-directory (first (.getDirectoriesOfType
+                                   metadata
+                                   com.drew.metadata.exif.GpsDirectory))]
+      (append-image
+       (.getLongitude (.getGeoLocation gpx-directory))
+       (.getLatitude (.getGeoLocation gpx-directory))
+       (.replace (last image-path) ".jpg" "")
+       image-path))))
+
+#_(doseq [image-path (filter
+                    #(.endsWith (last %) ".JPG")
+                    (fs/list
+                     (path/string->path
+                      "/Users/vanja/my-dataset-temp/gopro-copy/2020.06 - Geocaching Kosmaj mapillary/")))]
+  (println "processing: " (path/path->string image-path))
+  (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
+                  (new java.io.File (path/path->string image-path)))]
+    (if-let [gpx-directory (first (.getDirectoriesOfType
+                                   metadata
+                                   com.drew.metadata.exif.GpsDirectory))]
+      (append-image
+       (.getLongitude (.getGeoLocation gpx-directory))
+       (.getLatitude (.getGeoLocation gpx-directory))
+       (.replace (last image-path) ".jpg" "")
+       image-path))))
+
+
+
+#_(count (deref storage))
+
+(def ^:dynamic *port* 7076)
+
 (http-server/create-server
- 7076
+ *port*
  (compojure.core/routes
   (compojure.core/GET
    "/query"
@@ -60,6 +98,32 @@
                                :type "Point"
                                :coordinates [(:longitude image) (:latitude image)]}})
                  (list-all-images))
+         data {
+               :type "FeatureCollection"
+               :properties {}
+               :features images}]
+     {
+      :status 200
+      :body (json/write-to-string data)}))
+  (compojure.core/GET
+   "/tile/all/:zoom/:x/:y"
+   [zoom x y]
+   (let [zoom (as/as-long zoom)
+         x (as/as-long x)
+         y (as/as-long y)
+         tile [zoom x y]
+         images (map
+                 (fn [image]
+                   {
+                    :type "Feature"
+                    :properties {
+                                 "url" (str "/image/original/" (:id image))}
+                    :geometry {
+                               :type "Point"
+                               :coordinates [(:longitude image) (:latitude image)]}})
+                 (filter
+                  #(= tile (tile-math/zoom->location->tile zoom %))
+                  (list-all-images)))
          data {
                :type "FeatureCollection"
                :properties {}
@@ -116,5 +180,3 @@
      {
       :status 200
       :body (fs/input-stream (:path image))}))))
-
-
