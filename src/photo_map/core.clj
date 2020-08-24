@@ -77,6 +77,78 @@
        image-path))))
 
 
+#_(doseq [image-path (filter
+                    #(.endsWith (last %) ".JPG")
+                    (fs/list
+                     (path/string->path
+                      "/Users/vanja/Pictures/gopro/to-backup/2020.07 - Divcibare kruzna staza mapillary/")))]
+  (println "processing: " (path/path->string image-path))
+  (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
+                  (new java.io.File (path/path->string image-path)))]
+    (when-let [gpx-directory (first (.getDirectoriesOfType
+                                   metadata
+                                   com.drew.metadata.exif.GpsDirectory))]
+      (when-let [geolocation (.getGeoLocation gpx-directory)]
+        (append-image
+         (.getLongitude geolocation)
+        (.getLatitude geolocation)
+        (.replace (last image-path) ".jpg" "")
+        image-path)))))
+
+#_(let [image-path (path/string->path "/Users/vanja/Pictures/gopro/to-backup/2020.07 - Divcibare kruzna staza mapillary/G0017588.JPG")]
+  (println "processing: " (path/path->string image-path))
+  (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
+                  (new java.io.File (path/path->string image-path)))]
+    (if-let [gpx-directory (first (.getDirectoriesOfType
+                                   metadata
+                                   com.drew.metadata.exif.GpsDirectory))]
+      (do
+        (def a gpx-directory)
+        (println
+       (.getLongitude (.getGeoLocation gpx-directory))
+       (.getLatitude (.getGeoLocation gpx-directory))
+       (.replace (last image-path) ".jpg" "")
+       image-path)))))
+
+
+#_(doseq [image-path (filter
+                    #(.endsWith (last %) ".JPG")
+                    (fs/list
+                     (path/string->path
+                      "/Users/vanja/my-dataset-temp/gopro-backup/2020.08 - Baberijus gopro/")))]
+  (println "processing: " (path/path->string image-path))
+  (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
+                  (new java.io.File (path/path->string image-path)))]
+    (if-let [gpx-directory (first (.getDirectoriesOfType
+                                   metadata
+                                   com.drew.metadata.exif.GpsDirectory))]
+      (if-let [geolocation (.getGeoLocation gpx-directory)]
+        (append-image
+         (.getLongitude geolocation)
+         (.getLatitude geolocation)
+         (.replace (last image-path) ".JPG" "")
+         image-path))
+      )))
+
+(doseq [image-path (filter
+                    #(.endsWith (last %) ".JPG")
+                    (fs/list
+                     (path/string->path
+                      "/Users/vanja/to-dataset/2020.08 - Zlatibor gopro")))]
+  (println "processing: " (path/path->string image-path))
+  (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
+                  (new java.io.File (path/path->string image-path)))]
+    (if-let [gpx-directory (first (.getDirectoriesOfType
+                                   metadata
+                                   com.drew.metadata.exif.GpsDirectory))]
+      (if-let [geolocation (.getGeoLocation gpx-directory)]
+        (append-image
+         (.getLongitude geolocation)
+         (.getLatitude geolocation)
+         (.replace (last image-path) ".JPG" "")
+         image-path)))))
+
+#_(swap! storage (constantly {}))
 
 #_(count (deref storage))
 
