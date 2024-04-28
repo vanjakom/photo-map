@@ -61,7 +61,10 @@
                     #(.endsWith (last %) ".JPG")
                     (fs/list
                      (path/string->path
-                      "/Volumes/dataset/raw/gopro/2021.07 - Nesa krstenje"
+                      "/Users/vanja/dataset-local/gopro-evidence/incoming"
+                      #_"/Users/vanja/temp/202GOPRO"
+                      #_"/Volumes/GOPROSD/DCIM/202GOPRO"
+                      #_"/Volumes/dataset/raw/gopro/2021.07 - Nesa krstenje"
                       #_"/Users/vanja/dataset-local/raw-pending/gopro/2021.05 - Suvobor - Boljkovci bike/")))]
   (println "processing: " (path/path->string image-path))
   (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
@@ -89,17 +92,21 @@
 (def icloud-storage-path ["Volumes" "dataset" "raw" "icloud-stream"])
 ;; storage format YEAR/MONTH/DAY
 (def path-seq
-  (mapcat
-   (fn [month-path]
-     (fs/list month-path))
+  (sort
    (mapcat
-    (fn [year-path]
-      (fs/list year-path))
-    (fs/list icloud-storage-path))))
+    (fn [month-path]
+      (fs/list month-path))
+    (mapcat
+     (fn [year-path]
+       (fs/list year-path))
+     (fs/list icloud-storage-path)))))
 
 (def ^:dynamic *output* false)
 
 (defn convert-from-heic-to-jpg [path]
+  ;; requires brew install graphicsmagick on mac
+  ;; runs
+  ;; /usr/local/bin/magick mogrify -monitor -format jpg *.HEIC
   (let [pb (new java.lang.ProcessBuilder ["/usr/local/bin/magick" "mogrify" "-monitor" "-format" "jpg" "*.HEIC"])]
     (.directory pb (new java.io.File (path/path->string path)))
     (.redirectErrorStream pb true)
@@ -124,8 +131,13 @@
           (filter #(.endsWith % ".HEIC") image-set))))))
    path-seq))
 
-#_(count path-seq) ;; 1900
-#_(count convert-path-seq) ;; 369 ;; 397
+#_(count path-seq)
+;; 20220119 2179
+;; <20220119 1900
+#_(count convert-path-seq) ;; 0 ;; 95 ;; 369 ;; 397
+
+#_(last path-seq)
+;; ["Volumes" "dataset" "raw" "icloud-stream" "2022" "01" "17"]
 
 #_(doseq [convert-path convert-path-seq]
   (convert-from-heic-to-jpg convert-path))
@@ -151,19 +163,40 @@
             :md5 (hash/md5-bytes (io/input-stream->bytes (fs/input-stream path)))
             :timestamp (.getTime date)}))))))
 
-#_(binding [*output* true]
-  (with-open [os (fs/output-stream-by-appending (path/child dataset-path "log.json"))]
-    (doseq [directory (take 20 path-seq)]
-      (doseq [path (filter
-                    #(or
-                      (.endsWith (last %) ".JPG")
-                      (.endsWith (last %) ".jpg"))
-                    (fs/list directory))]
-        (when *output*
-          (println "processing: " (path/path->string path)))
-        (if-let [info (extract-image-info path)]
-          (json/write-to-line-stream info os)
-          (println "failed: " (path/path->string path)))))))
+
+;; test what should be processed
+#_(drop-while
+   #(not (= % ["Volumes" "dataset" "raw" "icloud-stream" "2022" "01" "17"]))
+   path-seq)
+
+;; incremental processing
+;; once processing is finished update latest path
+#_(let [last-path ["Volumes" "dataset" "raw" "icloud-stream" "2022" "01" "18"]]
+  (binding [*output* true]
+    (with-open [os (fs/output-stream-by-appending (path/child dataset-path "log.json"))]
+      ;; last processed path will be reprocessed
+      ;; to solve possibility of middle of day sync
+      (doseq [directory (drop-while #(not (= % last-path)) path-seq)]
+        (doseq [path (filter
+                      #(or
+                        (.endsWith (last %) ".JPG")
+                        (.endsWith (last %) ".jpg"))
+                      (fs/list directory))]
+          (when *output*
+            (println "processing: " (path/path->string path)))
+          (if-let [info (extract-image-info path)]
+            (json/write-to-line-stream info os)
+            (println "failed: " (path/path->string path))))
+        (.flush os)))))
+
+;; lookup for invalid files ( probaby created during download process
+#_(doseq [path path-seq]
+  (doseq [file (filter #(.startsWith (last %) ".") (fs/list path))]
+    (println (path/path->string file))))
+
+
+#_(last path-seq)
+#_["Volumes" "dataset" "raw" "icloud-stream" "2022" "01" "17"]
 
 #_(:timestamp (extract-image-info ["tmp" "IMG_0291.jpg"]))
 
@@ -177,7 +210,7 @@
      os)))
 
 (defn dotstore-fixed-append
-  "Appends sequence of dots ( longitude, latitude required ) to fixed zoo
+  "Appends sequence of dots ( longitude, latitude required ) to fixed zoom
   dotstore, assumes dots are ordered for best performance, Once different tile
   is extracted previous file is closed and new opened. In case data for given
   longitude, latitude pair exists data is overwritten. Longitude and latitude
