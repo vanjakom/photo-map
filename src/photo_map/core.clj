@@ -42,7 +42,7 @@
                     #(.endsWith (last %) ".JPG")
                     (fs/list
                      (path/string->path
-                      "/Users/vanja/dataset-local/raw-pending/icloud-stream/2021/05/11")))]
+                      "/Users/vanja/dataset-local/icloud-stream/vanja/2025/09/01")))]
   (println "processing: " (path/path->string image-path))
   (let [metadata (com.drew.imaging.ImageMetadataReader/readMetadata
                   (new java.io.File (path/path->string image-path)))]
@@ -89,7 +89,7 @@
 ;; search icloud images backed up with icloudpd
 ;; find directories containing
 (def dataset-path ["Users" "vanja" "dataset-cloud" "photo-map" "icloud-storage"])
-(def icloud-storage-path ["Volumes" "dataset" "raw" "icloud-stream"])
+(def icloud-storage-path ["Users" "vanja" "dataset-local" "icloud-stream" "vanja"])
 ;; storage format YEAR/MONTH/DAY
 (def path-seq
   (sort
@@ -219,7 +219,7 @@
   ;; todo add id to be able to display multiple photos on single location
   )
 
-(def ^:dynamic *port* 7076)
+(def ^:dynamic *port* 7072)
 
 (http-server/create-server
  *port*
